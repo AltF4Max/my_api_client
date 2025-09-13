@@ -163,7 +163,8 @@ func (c *APIClient) Request(ctx context.Context, path, method string, data inter
 	if resp.StatusCode == 401 {
 		c.logger.Warn("authentication failed, attempting token refresh")
 		if err := c.forceTokenRefresh(ctx); err != nil {
-			return response, fmt.Errorf("token refresh failed: %w", err)
+			// Just log the error, but do not return it.
+			c.logger.Warn("token refresh failed", "error", err.Error())
 		}
 	}
 
