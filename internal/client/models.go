@@ -62,6 +62,28 @@ type ErrorResponse struct {
 	Fields    []string `json:"fields,omitempty"`
 }
 
+type Response struct {
+	Success bool              `json:"success"`
+	Code    int               `json:"code"`
+	Status  string            `json:"status"`
+	Data    json.RawMessage   `json:"data,omitempty"`
+	Raw     string            `json:"raw,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
+// EmailMessageParams contains parameters for creating an EmailMessage
+type EmailMessageParams struct {
+	CaseId    string `json:"ParentId,omitempty"`
+	From      string `json:"FromAddress,omitempty"`
+	FromName  string `json:"FromName,omitempty"`
+	To        string `json:"ToAddress,omitempty"`
+	Subject   string `json:"Subject,omitempty"`
+	TextBody  string `json:"TextBody,omitempty"`
+	Thread    string `json:"ThreadIdentifier,omitempty"`
+	ContactId string `json:"ContactId,omitempty"`
+	Status    int    `json:"Status,omitempty"`
+}
+
 // AuthConfig authentication configuration
 type AuthConfig struct {
 	ClientID     string
@@ -84,14 +106,6 @@ type APIClient struct {
 	caseID      string
 	mu          sync.Mutex
 	logger      *Logger
-}
-type Response struct {
-	Success bool              `json:"success"`
-	Code    int               `json:"code"`
-	Status  string            `json:"status"`
-	Data    json.RawMessage   `json:"data,omitempty"`
-	Raw     string            `json:"raw,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
 }
 
 type Logger struct {
@@ -161,17 +175,4 @@ func (c *APIClient) SetCaseID(caseID string) {
 // GetCaseID returns the current case ID
 func (c *APIClient) GetCaseID() string {
 	return c.caseID
-}
-
-// EmailMessageParams contains parameters for creating an EmailMessage
-type EmailMessageParams struct {
-	CaseId    string `json:"ParentId,omitempty"`
-	From      string `json:"FromAddress,omitempty"`
-	FromName  string `json:"FromName,omitempty"`
-	To        string `json:"ToAddress,omitempty"`
-	Subject   string `json:"Subject,omitempty"`
-	TextBody  string `json:"TextBody,omitempty"`
-	Thread    string `json:"ThreadIdentifier,omitempty"`
-	ContactId string `json:"ContactId,omitempty"`
-	Status    int    `json:"Status,omitempty"`
 }
