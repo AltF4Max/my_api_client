@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"my-api-client/examples"
 	"my-api-client/internal/client"
 
 	"gopkg.in/yaml.v3"
@@ -25,6 +26,69 @@ var config struct {
 		Debug        bool   `yaml:"debug"`
 		ToEmail      string `yaml:"to_email"`
 	} `yaml:"salesforce"`
+}
+
+func main() {
+	// Loading configuration from file in config folder
+	authConfig, err := loadConfig("config/config.yaml")
+	if err != nil {
+		log.Fatalf("Error loading configuration: %v", err)
+	}
+	// Creating a client
+	apiClient := client.NewAPIClient(authConfig)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// 1. CreateCase
+	createdCase, err := examples.ExamplesCreateCase(ctx, apiClient)
+	if err != nil {
+		log.Fatalf("Failed to create case: %v", err)
+	}
+	fmt.Printf("Created case with ID: %s\n", createdCase.ID)
+
+	// 2. GetCase
+	caseObj, err := examples.ExamplesGetCase(ctx, apiClient)
+	if err != nil {
+		log.Fatalf("Failed to get case: %v", err)
+	}
+	fmt.Printf("Case Subject: %s\n", caseObj.Subject)
+	fmt.Printf("Case Status: %s\n", caseObj.Status)
+	fmt.Printf("Case Priority: %s\n", caseObj.Priority)
+
+	// 3. Query
+	result, err := examples.ExamplesQuery(ctx, apiClient)
+	if err != nil {
+		log.Fatalf("Failed to execute query: %v", err)
+	}
+	fmt.Printf("Found %d cases\n", result.TotalSize)
+	for _, record := range result.Records {
+		fmt.Printf("Record: %+v\n", record)
+	}
+
+	// 4. CreateAttachment
+	result2, err := examples.ExamplesCreateAttachment(ctx, apiClient)
+	if err != nil {
+		log.Fatalf("Failed to create attachment: %v", err)
+	}
+	if success, ok := result2["success"].(bool); ok && success {
+		fmt.Printf("Attachment created successfully\n")
+		if data, ok := result2["data"].(map[string]interface{}); ok {
+			if id, ok := data["id"].(string); ok {
+				fmt.Printf("Attachment ID: %s\n", id)
+			}
+		}
+	} else {
+		fmt.Printf("Attachment creation failed: %+v\n", result2)
+	}
+
+	// 5. EmailMessage
+	toAddress := config.Salesforce.ToEmail
+	result3, err := examples.ExamplesEmailMessage(ctx, apiClient, toAddress)
+	if err != nil {
+		log.Fatalf("Error creating email message: %v", err)
+	}
+	fmt.Printf("Email message created: %+v\n", result3)
 }
 
 func loadConfig(filename string) (*client.AuthConfig, error) {
@@ -56,129 +120,4 @@ func loadConfig(filename string) (*client.AuthConfig, error) {
 	}
 
 	return authConfig, nil
-}
-func main() {
-	// Loading configuration from file in config folder
-	authConfig, err := loadConfig("config/config.yaml")
-	if err != nil {
-		log.Fatalf("Error loading configuration: %v", err)
-	}
-	// Creating a client
-	apiClient := client.NewAPIClient(authConfig)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Create a new case with full data
-	newCase := &client.Case{
-		Status:        "New",
-		Origin:        "Support",
-		AccountId:     "", // Fill in if you have an Account ID
-		ContactId:     "", // Fill in if you have Contact ID
-		Subject:       "Test Case from Go",
-		SuppliedName:  "Test User",        // Username
-		SuppliedEmail: "test@example.com", // User email
-		SuppliedPhone: "+1234567890",      // Telephone
-		Description:   "This case was created from Go client with full details",
-		Product:       "Cyber Protect", // Product
-		Type:          "Case",
-		//RecordTypeId:     "01250000000DfSU",
-		//SuppliedCountry:  "US",                    // Country code
-		//IPAddress:        "192.168.1.1",           // IP address
-		//Severity:         "Medium",                // The severity of the problem
-		//OperatingSystem:  "CentOS Linux",          // OS
-		//WebQueueEmail:    "sf-all@cyber.com",
-		//WebURL:           "oem.cyber.com",
-	}
-
-	// Headers for creating a case
-	caseHeaders := client.CaseHeaders{
-		SforceAssignmentRuleHeader: "assignmentRuleId=01Q50000000A9r2EAC",
-		SforceEmailHeader:          "triggerAutoResponseEmail=true, triggerUserEmail=true",
-	}
-
-	// Create a case with headers
-	createdCase, err := apiClient.CreateCase(ctx, newCase, caseHeaders)
-	if err != nil {
-		log.Fatalf("Failed to create case: %v", err)
-	}
-
-	fmt.Printf("Created case with ID: %s\n", createdCase.ID)
-
-	caseID := "500gK00000JCbtiQAD"
-	caseObj, err := apiClient.GetCase(ctx, caseID)
-	if err != nil {
-		log.Fatalf("Failed to get case: %v", err)
-	}
-	fmt.Printf("Case Subject: %s\n", caseObj.Subject)
-	fmt.Printf("Case Status: %s\n", caseObj.Status)
-	fmt.Printf("Case Priority: %s\n", caseObj.Priority)
-	// Executing a SOQL query
-	soql := "SELECT Id, Subject, Status FROM Case LIMIT 5"
-	result, err := apiClient.Query(ctx, soql)
-	if err != nil {
-		log.Fatalf("Failed to execute query: %v", err)
-	}
-
-	fmt.Printf("Found %d cases\n", result.TotalSize)
-	for _, record := range result.Records {
-		fmt.Printf("Record: %+v\n", record)
-	}
-
-	// Setting up Case ID
-	apiClient.SetCaseID("500gK00000JCbtiQAD")
-
-	// Path to an existing PDF file
-	filePath := "C:\\Users\\Max\\Desktop\\my-api-client\\path\\to\\real_document.pdf"
-
-	// Check that the file exists
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		log.Fatalf("The file does not exist: %s\nPlease check the path and existence of the file.", filePath)
-	}
-
-	// Check that this is a file (not a directory)
-	fileInfo, err := os.Stat(filePath)
-	if err != nil {
-		log.Fatalf("Error getting file information: %v", err)
-	}
-	if fileInfo.IsDir() {
-		log.Fatalf("The path specified leads to a directory, not a file: %s", filePath)
-	}
-
-	fmt.Printf("File used: %s\n", filePath)
-	fmt.Printf("File size: %d byte\n", fileInfo.Size())
-
-	result2, err := apiClient.CreateAttachment(ctx, filePath)
-	if err != nil {
-		log.Fatalf("Failed to create attachment: %v", err)
-	}
-
-	if success, ok := result2["success"].(bool); ok && success {
-		fmt.Printf("Attachment created successfully\n")
-		if data, ok := result2["data"].(map[string]interface{}); ok {
-			if id, ok := data["id"].(string); ok {
-				fmt.Printf("Attachment ID: %s\n", id)
-			}
-		}
-	} else {
-		fmt.Printf("Attachment creation failed: %+v\n", result2)
-	}
-
-	// Creating parameters
-	params := client.EmailMessageParams{
-		ParentId:    "500gK00000JCbtiQAD", // ID case example
-		FromAddress: "user@example.com",
-		Subject:     "Test Email Subject",
-		TextBody:    "This is the body of the test email",
-		ToAddress:   config.Salesforce.ToEmail,
-	}
-
-	// Calling a Method
-	result3, err := apiClient.EmailMessage(context.Background(), params)
-	if err != nil {
-		log.Fatalf("Error creating email message: %v", err)
-	}
-
-	fmt.Printf("Email message created: %+v\n", result3)
-
 }
