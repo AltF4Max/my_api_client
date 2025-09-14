@@ -8,3 +8,5 @@ salesforce:
   grant_type: "password"
   debug: true
   to_email: "support@example.com"
+  log_file: "logs/salesforce.log" 
+  log_level: "info"

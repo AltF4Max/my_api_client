@@ -2,8 +2,11 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -92,6 +95,8 @@ type AuthConfig struct {
 	LoginURL     string
 	GrantType    string
 	Debug        bool
+	LogFile      string
+	LogLevel     string
 }
 
 // APIClient main client
@@ -107,49 +112,66 @@ type APIClient struct {
 }
 
 type Logger struct {
-	debug bool
+	debug   bool
+	logFile *os.File
+	writer  io.Writer
 }
 
-// NewLogger creates a new logger
-func NewLogger(debug bool) *Logger {
-	return &Logger{debug: debug}
+// NewLogger creates a new logger with file support
+func NewLogger(debug bool, logFile string) *Logger {
+	var writer io.Writer = os.Stdout
+
+	if logFile != "" {
+		file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			log.Printf("Failed to open log file %s: %v, using stdout", logFile, err)
+		} else {
+			writer = file
+			return &Logger{debug: debug, logFile: file, writer: writer}
+		}
+	}
+
+	return &Logger{debug: debug, writer: writer}
+}
+
+// Close closes the log file if it's open
+func (l *Logger) Close() error {
+	if l.logFile != nil {
+		return l.logFile.Close()
+	}
+	return nil
 }
 
 // Info logging information
 func (l *Logger) Info(message string, fields ...interface{}) {
 	if l.debug {
+		msg := fmt.Sprintf("INFO: %s", message)
 		if len(fields) > 0 {
-			log.Printf("INFO: %s %v", message, fields)
-		} else {
-			log.Printf("INFO: %s", message)
+			msg += fmt.Sprintf(" %v", fields)
 		}
+		fmt.Fprintln(l.writer, msg)
 	}
 }
 
 // Warn logging of warnings
 func (l *Logger) Warn(message string, fields ...interface{}) {
+	msg := fmt.Sprintf("WARN: %s", message)
 	if len(fields) > 0 {
-		log.Printf("WARN: %s %v", message, fields)
-	} else {
-		log.Printf("WARN: %s", message)
+		msg += fmt.Sprintf(" %v", fields)
 	}
+	fmt.Fprintln(l.writer, msg)
 }
 
 // Error logging errors
 func (l *Logger) Error(message string, err error, fields ...interface{}) {
+	msg := fmt.Sprintf("ERROR: %s", message)
 	if err != nil {
-		if len(fields) > 0 {
-			log.Printf("ERROR: %s - %v %v", message, err, fields)
-		} else {
-			log.Printf("ERROR: %s - %v", message, err)
-		}
-	} else {
-		if len(fields) > 0 {
-			log.Printf("ERROR: %s %v", message, fields)
-		} else {
-			log.Printf("ERROR: %s", message)
-		}
+		msg += fmt.Sprintf(" - %v", err)
 	}
+	if len(fields) > 0 {
+		msg += fmt.Sprintf(" %v", fields)
+	}
+	fmt.Fprintln(l.writer, msg)
 }
 
 // Json logging in JSON format (analog Perl Logger->json)
@@ -162,6 +184,13 @@ func (l *Logger) Json(data map[string]interface{}) {
 		}
 		log.Printf("JSON LOG:\n%s", string(jsonData))
 	}
+}
+
+func (c *APIClient) Close() error {
+	if c.logger != nil {
+		return c.logger.Close()
+	}
+	return nil
 }
 
 func (c *APIClient) SetCaseID(caseID string) {

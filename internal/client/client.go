@@ -21,7 +21,7 @@ func NewAPIClient(authConfig *AuthConfig) *APIClient {
 			Timeout: 30 * time.Second,
 		},
 		authConfig: authConfig,
-		logger:     NewLogger(authConfig.Debug), // Initialize the logger
+		logger:     NewLogger(authConfig.Debug, authConfig.LogFile),
 	}
 }
 
@@ -86,9 +86,11 @@ func (c *APIClient) CreateCase(ctx context.Context, caseData *Case, headers ...C
 	}
 
 	// Logging request data for debugging
-	jsonData, _ := json.MarshalIndent(caseData, "", "  ")
-	c.logger.Info("Creating case with data:", string(jsonData))
-	c.logger.Info("Request headers:", reqHeaders)
+	if c.logger.debug {
+		jsonData, _ := json.MarshalIndent(caseData, "", "  ")
+		c.logger.Info("Creating case with data:", string(jsonData))
+		c.logger.Info("Request headers:", reqHeaders)
+	}
 
 	resp, err := c.doRequestWithHeaders(ctx, "POST", "/services/data/v64.0/sobjects/Case/", caseData, reqHeaders)
 	if err != nil {
