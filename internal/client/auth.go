@@ -181,10 +181,3 @@ func (c *APIClient) forceTokenRefresh(ctx context.Context) error {
 
 	return c.authenticate(ctx)
 }
-
-// SetRefreshToken sets a new refresh_token
-func (c *APIClient) SetRefreshToken(refreshToken string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.authConfig.RefreshToken = refreshToken
-}

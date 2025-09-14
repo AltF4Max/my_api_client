@@ -73,15 +73,13 @@ type Response struct {
 
 // EmailMessageParams contains parameters for creating an EmailMessage
 type EmailMessageParams struct {
-	CaseId    string `json:"ParentId,omitempty"`
-	From      string `json:"FromAddress,omitempty"`
-	FromName  string `json:"FromName,omitempty"`
-	To        string `json:"ToAddress,omitempty"`
-	Subject   string `json:"Subject,omitempty"`
-	TextBody  string `json:"TextBody,omitempty"`
-	Thread    string `json:"ThreadIdentifier,omitempty"`
-	ContactId string `json:"ContactId,omitempty"`
-	Status    int    `json:"Status,omitempty"`
+	ParentId    string `json:"ParentId,omitempty"`
+	FromAddress string `json:"FromAddress,omitempty"`
+	FromName    string `json:"FromName,omitempty"`
+	ToAddress   string `json:"ToAddress,omitempty"`
+	Subject     string `json:"Subject,omitempty"`
+	TextBody    string `json:"TextBody,omitempty"`
+	Status      int    `json:"Status,omitempty"`
 }
 
 // AuthConfig authentication configuration

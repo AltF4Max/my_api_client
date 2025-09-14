@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 
@@ -506,98 +505,4 @@ func (c *APIClient) SetInstanceURL(instanceURL string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.instanceURL = instanceURL
-}
-
-func TestAPIClient_SetRefreshToken(t *testing.T) {
-	t.Run("set refresh token correctly", func(t *testing.T) {
-		config := &AuthConfig{
-			ClientID:     "test-client-id",
-			ClientSecret: "test-client-secret",
-			RefreshToken: "old-refresh-token",
-			GrantType:    "refresh_token",
-			Debug:        true,
-		}
-
-		client := NewAPIClient(config)
-		newToken := "new-refresh-token-123"
-		client.SetRefreshToken(newToken)
-
-		assert.Equal(t, newToken, client.authConfig.RefreshToken)
-	})
-
-	t.Run("set empty refresh token", func(t *testing.T) {
-		config := &AuthConfig{
-			ClientID:     "test-client-id",
-			ClientSecret: "test-client-secret",
-			RefreshToken: "old-refresh-token",
-			GrantType:    "refresh_token",
-			Debug:        true,
-		}
-
-		client := NewAPIClient(config)
-		client.SetRefreshToken("")
-		assert.Equal(t, "", client.authConfig.RefreshToken)
-	})
-
-	t.Run("concurrent access to refresh token", func(t *testing.T) {
-		config := &AuthConfig{
-			ClientID:     "test-client-id",
-			ClientSecret: "test-client-secret",
-			RefreshToken: "initial-token",
-			GrantType:    "refresh_token",
-			Debug:        true,
-		}
-
-		client := NewAPIClient(config)
-		var wg sync.WaitGroup
-		tokens := []string{"token1", "token2", "token3", "token4", "token5"}
-
-		for _, token := range tokens {
-			wg.Add(1)
-			go func(tokenValue string) {
-				defer wg.Done()
-				client.SetRefreshToken(tokenValue)
-			}(token)
-		}
-
-		wg.Wait()
-		assert.NotEmpty(t, client.authConfig.RefreshToken)
-	})
-
-	t.Run("set refresh token and verify other config fields unchanged", func(t *testing.T) {
-		config := &AuthConfig{
-			ClientID:     "test-client-id",
-			ClientSecret: "test-client-secret",
-			RefreshToken: "original-token",
-			GrantType:    "refresh_token",
-			Debug:        true,
-		}
-
-		client := NewAPIClient(config)
-		newToken := "updated-refresh-token-456"
-		client.SetRefreshToken(newToken)
-
-		assert.Equal(t, newToken, client.authConfig.RefreshToken)
-		assert.Equal(t, "test-client-id", client.authConfig.ClientID)
-		assert.Equal(t, "test-client-secret", client.authConfig.ClientSecret)
-		assert.Equal(t, "refresh_token", client.authConfig.GrantType)
-		assert.True(t, client.authConfig.Debug)
-	})
-
-	t.Run("set refresh token multiple times", func(t *testing.T) {
-		config := &AuthConfig{
-			ClientID:     "test-client-id",
-			ClientSecret: "test-client-secret",
-			RefreshToken: "first-token",
-			GrantType:    "refresh_token",
-			Debug:        true,
-		}
-
-		client := NewAPIClient(config)
-		client.SetRefreshToken("second-token")
-		client.SetRefreshToken("third-token")
-		client.SetRefreshToken("fourth-token")
-
-		assert.Equal(t, "fourth-token", client.authConfig.RefreshToken)
-	})
 }

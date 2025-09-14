@@ -299,7 +299,6 @@ func (c *APIClient) UploadAttachment(ctx context.Context, parentID, filePath str
 		"Body":     b64Data,
 	}
 
-	// We use the Request method
 	res, err := c.Request(
 		ctx,
 		"/services/data/v58.0/sobjects/Attachment/",
@@ -351,16 +350,15 @@ func (c *APIClient) UploadAttachment(ctx context.Context, parentID, filePath str
 // EmailMessage creates a new email message
 func (c *APIClient) EmailMessage(ctx context.Context, params EmailMessageParams) (map[string]interface{}, error) {
 	// Set default values
-	if params.To == "" {
-		params.To = "customerservice@acronis.com"
-	}
+	//if params.To == "" {}
+
 	if params.Status == 0 {
 		params.Status = 3
 	}
 
 	// If CaseId is not passed, use the value from the client (if any)
-	if params.CaseId == "" && c.caseID != "" {
-		params.CaseId = c.caseID
+	if params.ParentId == "" && c.caseID != "" {
+		params.ParentId = c.caseID
 	}
 
 	resp, err := c.doRequest(ctx, "POST", "/services/data/v64.0/sobjects/EmailMessage/", params)

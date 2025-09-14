@@ -12,6 +12,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Structure for parsing given the root element salesforce
+var config struct {
+	Salesforce struct {
+		ClientID     string `yaml:"client_id"`
+		ClientSecret string `yaml:"client_secret"`
+		RefreshToken string `yaml:"refresh_token"`
+		Username     string `yaml:"username"`
+		Password     string `yaml:"password"`
+		LoginURL     string `yaml:"login_url"`
+		GrantType    string `yaml:"grant_type"`
+		Debug        bool   `yaml:"debug"`
+		ToEmail      string `yaml:"to_email"`
+	} `yaml:"salesforce"`
+}
+
 func loadConfig(filename string) (*client.AuthConfig, error) {
 	// Checking the existence of a file
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
@@ -21,20 +36,6 @@ func loadConfig(filename string) (*client.AuthConfig, error) {
 	bytes, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("error reading configuration file: %v", err)
-	}
-
-	// Structure for parsing given the root element salesforce
-	var config struct {
-		Salesforce struct {
-			ClientID     string `yaml:"client_id"`
-			ClientSecret string `yaml:"client_secret"`
-			RefreshToken string `yaml:"refresh_token"`
-			Username     string `yaml:"username"`
-			Password     string `yaml:"password"`
-			LoginURL     string `yaml:"login_url"`
-			GrantType    string `yaml:"grant_type"`
-			Debug        bool   `yaml:"debug"`
-		} `yaml:"salesforce"`
 	}
 
 	err = yaml.Unmarshal(bytes, &config)
@@ -71,7 +72,7 @@ func main() {
 	// Create a new case with full data
 	newCase := &client.Case{
 		Status:        "New",
-		Origin:        "OEM Portal",
+		Origin:        "Support",
 		AccountId:     "", // Fill in if you have an Account ID
 		ContactId:     "", // Fill in if you have Contact ID
 		Subject:       "Test Case from Go",
@@ -79,15 +80,15 @@ func main() {
 		SuppliedEmail: "test@example.com", // User email
 		SuppliedPhone: "+1234567890",      // Telephone
 		Description:   "This case was created from Go client with full details",
-		Product:       "Acronis Cyber Protect", // Product
+		Product:       "Cyber Protect", // Product
 		Type:          "Case",
-		// RecordTypeId:     "01250000000DfSU",
-		//SuppliedCountry: "US",          // Country code
-		//IPAddress:   "192.168.1.1", // IP address
-		//Severity: "Medium",                // The severity of the problem
-		//OperatingSystem: "CentOS Linux",          // OS
-		//WebQueueEmail: "sf-all@acronis.com",
-		//WebURL: "oem.acronis.com",
+		//RecordTypeId:     "01250000000DfSU",
+		//SuppliedCountry:  "US",                    // Country code
+		//IPAddress:        "192.168.1.1",           // IP address
+		//Severity:         "Medium",                // The severity of the problem
+		//OperatingSystem:  "CentOS Linux",          // OS
+		//WebQueueEmail:    "sf-all@cyber.com",
+		//WebURL:           "oem.cyber.com",
 	}
 
 	// Headers for creating a case
@@ -165,11 +166,11 @@ func main() {
 
 	// Creating parameters
 	params := client.EmailMessageParams{
-		CaseId:   "500gK00000JCbtiQAD", // ID case example
-		From:     "user@example.com",
-		Subject:  "Test Email Subject",
-		TextBody: "This is the body of the test email",
-		// To and Status will be set by default
+		ParentId:    "500gK00000JCbtiQAD", // ID case example
+		FromAddress: "user@example.com",
+		Subject:     "Test Email Subject",
+		TextBody:    "This is the body of the test email",
+		ToAddress:   config.Salesforce.ToEmail,
 	}
 
 	// Calling a Method
