@@ -1,9 +1,10 @@
 salesforce:
   client_id: "123456789012-abcd1234efgh5678ijkl90mnop.apps.googleusercontent.com"
-  client_secret: "GOCSPX-abcDEF123ghiJKL456mnoPQR789stu"
+  client_secret: "GOCSPX-abcDEF123ghiJKL456mnoPQR789stu" 
   refresh_token: "1//0abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_ABCDE"
   username: "jane.smith@company-test.com"
   password: "T3st!P@ssw0rd2024"
-  login_url: "https://accounts.google.com/o/oauth2/auth"
+  login_url: "https://login.salesforce.com/services/oauth2/token"
   grant_type: "password"
   debug: true
+  to_email: "support@example.com"
