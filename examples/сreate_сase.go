@@ -2,7 +2,8 @@ package examples
 
 import (
 	"context"
-	"my-api-client/internal/client"
+
+	"github.com/AltF4Max/my_api_client/internal/client"
 )
 
 func ExamplesCreateCase(ctx context.Context, apiClient *client.APIClient) (*client.Case, error) {
@@ -17,7 +18,7 @@ func ExamplesCreateCase(ctx context.Context, apiClient *client.APIClient) (*clie
 		SuppliedEmail: "test@example.com", // User email
 		SuppliedPhone: "+1234567890",      // Telephone
 		Description:   "This case was created from Go client with full details",
-		Product:       "Cyber Protect", // Product
+		Product:       "Advanced Subscription", // Product
 		Type:          "Case",
 		//RecordTypeId:     "01250000000DfSU",
 		//SuppliedCountry:  "US",                    // Country code

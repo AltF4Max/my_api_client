@@ -2,7 +2,8 @@ package examples
 
 import (
 	"context"
-	"my-api-client/internal/client"
+
+	"github.com/AltF4Max/my_api_client/internal/client"
 )
 
 func ExamplesQuery(ctx context.Context, apiClient *client.APIClient) (*client.QueryResponse, error) {

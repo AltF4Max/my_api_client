@@ -2,7 +2,8 @@ package examples
 
 import (
 	"context"
-	"my-api-client/internal/client"
+
+	"github.com/AltF4Max/my_api_client/internal/client"
 )
 
 func ExamplesEmailMessage(ctx context.Context, apiClient *client.APIClient, to string) (map[string]interface{}, error) {
@@ -16,7 +17,7 @@ func ExamplesEmailMessage(ctx context.Context, apiClient *client.APIClient, to s
 	}
 
 	// Calling a Method
-	result, err := apiClient.EmailMessage(context.Background(), params)
+	result, err := apiClient.EmailMessage(ctx, params)
 	if err != nil {
 		return nil, err //Error creating email message
 	}

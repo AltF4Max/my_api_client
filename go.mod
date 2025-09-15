@@ -1,4 +1,4 @@
-module my-api-client
+module github.com/AltF4Max/my_api_client
 
 go 1.21.5
 

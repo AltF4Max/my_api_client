@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"my-api-client/internal/client"
 	"os"
+
+	"github.com/AltF4Max/my_api_client/internal/client"
 )
 
 func ExamplesCreateAttachment(ctx context.Context, apiClient *client.APIClient) (map[string]interface{}, error) {

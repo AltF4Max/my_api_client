@@ -2,7 +2,8 @@ package examples
 
 import (
 	"context"
-	"my-api-client/internal/client"
+
+	"github.com/AltF4Max/my_api_client/internal/client"
 )
 
 func ExamplesGetCase(ctx context.Context, apiClient *client.APIClient) (*client.Case, error) {

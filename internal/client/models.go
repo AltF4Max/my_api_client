@@ -95,6 +95,7 @@ type AuthConfig struct {
 	LoginURL     string
 	GrantType    string
 	Debug        bool
+	ToEmail      string
 	LogFile      string
 	LogLevel     string
 }
