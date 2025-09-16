@@ -24,6 +24,7 @@ type AuthResponse struct {
 // Case model for Case object with extended fields
 type Case struct {
 	ID              string `json:"Id,omitempty"`
+	CaseNumber      string `json:"CaseNumber,omitempty"`
 	Subject         string `json:"Subject,omitempty"`
 	Description     string `json:"Description,omitempty"`
 	Status          string `json:"Status,omitempty"`
@@ -83,6 +84,7 @@ type EmailMessageParams struct {
 	Subject     string `json:"Subject,omitempty"`
 	TextBody    string `json:"TextBody,omitempty"`
 	Status      int    `json:"Status,omitempty"`
+	Incoming    bool   `json:"Incoming,omitempty"`
 }
 
 // AuthConfig authentication configuration
