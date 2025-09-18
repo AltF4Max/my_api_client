@@ -27,6 +27,10 @@ func (c *APIClient) authenticate(ctx context.Context) error {
 		strings.NewReader(data.Encode()),
 	)
 	if err != nil {
+		c.logger.Error("Failed to create authentication request", err, map[string]interface{}{
+			"action":  "authentication",
+			"success": false,
+		})
 		return fmt.Errorf("failed to create auth request: %w", err)
 	}
 
@@ -34,26 +38,62 @@ func (c *APIClient) authenticate(ctx context.Context) error {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.logger.Error("Authentication request failed", err, map[string]interface{}{
+			"action":  "authentication",
+			"success": false,
+			"url":     c.authConfig.LoginURL,
+		})
 		return fmt.Errorf("auth request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// Reading the response body for registration
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.logger.Error("Failed to read authentication response body", err, map[string]interface{}{
+			"action":     "authentication",
+			"success":    false,
+			"status":     resp.Status,
+			"statusCode": resp.StatusCode,
+		})
+		return fmt.Errorf("failed to read auth response: %w", err)
+	}
+
 	// Improved error handling
 	if resp.StatusCode != http.StatusOK {
 		// Trying to read the error from response
-		var authError struct {
-			Error       string `json:"error"`
-			Description string `json:"error_description"`
+		var authError AuthError
+
+		if err := json.Unmarshal(body, &authError); err == nil && authError.Error != "" {
+			c.logger.Error("Authentication failed with Salesforce error", nil, map[string]interface{}{
+				"action":        "authentication",
+				"success":       false,
+				"statusCode":    resp.StatusCode,
+				"error":         authError.Error,
+				"description":   authError.ErrorDescription,
+				"response_body": string(body),
+			})
+			return fmt.Errorf("auth failed: %s - %s", authError.Error, authError.ErrorDescription)
 		}
 
-		if err := json.NewDecoder(resp.Body).Decode(&authError); err == nil {
-			return fmt.Errorf("auth failed: %s - %s", authError.Error, authError.Description)
-		}
+		c.logger.Error("Authentication failed with non-JSON error", nil, map[string]interface{}{
+			"action":        "authentication",
+			"success":       false,
+			"statusCode":    resp.StatusCode,
+			"status":        resp.Status,
+			"response_body": string(body),
+		})
 		return fmt.Errorf("auth failed with status: %s", resp.Status)
 	}
 
 	var authResp AuthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
+	if err := json.Unmarshal(body, &authResp); err != nil {
+		c.logger.Error("Failed to decode authentication response", err, map[string]interface{}{
+			"action":        "authentication",
+			"success":       false,
+			"statusCode":    resp.StatusCode,
+			"response_body": string(body),
+		})
 		return fmt.Errorf("failed to decode auth response: %w", err)
 	}
 
@@ -100,6 +140,12 @@ func (c *APIClient) Request(ctx context.Context, path, method string, data inter
 	if data != nil && (method == "POST" || method == "PUT" || method == "PATCH") {
 		reqBody, err = json.Marshal(data)
 		if err != nil {
+			c.logger.Error("Failed to marshal request data", err, map[string]interface{}{
+				"action":  "api_request",
+				"method":  method,
+				"path":    path,
+				"success": false,
+			})
 			return nil, fmt.Errorf("failed to marshal request data: %w", err)
 		}
 	}
@@ -107,6 +153,12 @@ func (c *APIClient) Request(ctx context.Context, path, method string, data inter
 	// Create an HTTP request
 	req, err := http.NewRequestWithContext(ctx, method, fullURL, bytes.NewReader(reqBody))
 	if err != nil {
+		c.logger.Error("Failed to create request", err, map[string]interface{}{
+			"action":  "api_request",
+			"method":  method,
+			"path":    path,
+			"success": false,
+		})
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
@@ -127,6 +179,12 @@ func (c *APIClient) Request(ctx context.Context, path, method string, data inter
 	// We execute the request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.logger.Error("Request failed", err, map[string]interface{}{
+			"action":  "api_request",
+			"method":  method,
+			"path":    path,
+			"success": false,
+		})
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -134,6 +192,13 @@ func (c *APIClient) Request(ctx context.Context, path, method string, data inter
 	// Reading the response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		c.logger.Error("Failed to read response body", err, map[string]interface{}{
+			"action":  "api_request",
+			"method":  method,
+			"path":    path,
+			"status":  resp.Status,
+			"success": false,
+		})
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
@@ -161,10 +226,20 @@ func (c *APIClient) Request(ctx context.Context, path, method string, data inter
 
 	// Handling authorization errors
 	if resp.StatusCode == 401 {
-		c.logger.Warn("authentication failed, attempting token refresh")
+		c.logger.Warn("Authentication failed, attempting token refresh", map[string]interface{}{
+			"action":     "token_refresh",
+			"method":     method,
+			"path":       path,
+			"statusCode": resp.StatusCode,
+		})
 		if err := c.forceTokenRefresh(ctx); err != nil {
 			// Just log the error, but do not return it.
-			c.logger.Warn("token refresh failed", "error", err.Error())
+			c.logger.Warn("Token refresh failed", map[string]interface{}{
+				"action": "token_refresh",
+				"method": method,
+				"path":   path,
+				"error":  err.Error(),
+			})
 		}
 	}
 

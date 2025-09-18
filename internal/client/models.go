@@ -21,6 +21,12 @@ type AuthResponse struct {
 	Signature   string `json:"signature"`
 }
 
+// AuthError model for OAuth error response
+type AuthError struct {
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description"`
+}
+
 // Case model for Case object with extended fields
 type Case struct {
 	ID              string `json:"Id,omitempty"`

@@ -29,8 +29,6 @@ func NewAPIClient(authConfig *AuthConfig) *APIClient {
 func (c *APIClient) doRequest(ctx context.Context, method, path string, body interface{}) (*http.Response, error) { //////
 	token, err := c.getValidToken(ctx)
 	if err != nil {
-		c.logger.Error("Failed to get valid token", err,
-			map[string]interface{}{"method": method, "path": path})
 		return nil, fmt.Errorf("failed to get token: %w", err)
 	}
 
@@ -162,12 +160,6 @@ func (c *APIClient) CreateCase(ctx context.Context, caseData *Case, headers ...C
 func (c *APIClient) doRequestWithHeaders(ctx context.Context, method, path string, body interface{}, customHeaders map[string]string) (*http.Response, error) {
 	token, err := c.getValidToken(ctx)
 	if err != nil {
-		c.logger.Error("Failed to get valid token", err,
-			map[string]interface{}{
-				"method":  method,
-				"path":    path,
-				"headers": customHeaders,
-			})
 		return nil, fmt.Errorf("failed to get token: %w", err)
 	}
 
