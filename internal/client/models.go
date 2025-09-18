@@ -75,6 +75,16 @@ type Response struct {
 	Headers map[string]string `json:"headers,omitempty"`
 }
 
+// AttachmentResponse model for Attachment API response
+type AttachmentResponse struct {
+	ID      string `json:"id"`
+	Success bool   `json:"success"`
+	Errors  []struct {
+		Message   string `json:"message"`
+		ErrorCode string `json:"errorCode"`
+	} `json:"errors"`
+}
+
 // EmailMessageParams contains parameters for creating an EmailMessage
 type EmailMessageParams struct {
 	ParentId    string `json:"ParentId,omitempty"`

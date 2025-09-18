@@ -3,7 +3,7 @@ package examples
 import (
 	"context"
 
-	"github.com/AltF4Max/my_api_client/internal/client"
+	"github.com/AltF4Max/sf_api_client/internal/client"
 )
 
 func ExamplesQuery(ctx context.Context, apiClient *client.APIClient) (*client.QueryResponse, error) {

@@ -29,6 +29,8 @@ func NewAPIClient(authConfig *AuthConfig) *APIClient {
 func (c *APIClient) doRequest(ctx context.Context, method, path string, body interface{}) (*http.Response, error) { //////
 	token, err := c.getValidToken(ctx)
 	if err != nil {
+		c.logger.Error("Failed to get valid token", err,
+			map[string]interface{}{"method": method, "path": path})
 		return nil, fmt.Errorf("failed to get token: %w", err)
 	}
 
@@ -36,6 +38,8 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, body int
 	if body != nil {
 		jsonData, err := json.Marshal(body)
 		if err != nil {
+			c.logger.Error("Failed to marshal request body", err,
+				map[string]interface{}{"method": method, "path": path})
 			return nil, fmt.Errorf("failed to marshal request body: %w", err)
 		}
 		reqBody = bytes.NewReader(jsonData)
@@ -44,6 +48,8 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, body int
 	fullURL := c.instanceURL + path
 	req, err := http.NewRequestWithContext(ctx, method, fullURL, reqBody)
 	if err != nil {
+		c.logger.Error("Failed to create HTTP request", err,
+			map[string]interface{}{"method": method, "url": fullURL})
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
@@ -53,6 +59,8 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, body int
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.logger.Error("HTTP request failed", err,
+			map[string]interface{}{"method": method, "url": fullURL})
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
@@ -60,8 +68,22 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, body int
 		defer resp.Body.Close()
 		var errResp ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+			c.logger.Error("Failed to decode error response", err,
+				map[string]interface{}{
+					"method":     method,
+					"url":        fullURL,
+					"statusCode": resp.StatusCode,
+				})
 			return nil, fmt.Errorf("request failed with status: %s", resp.Status)
 		}
+		c.logger.Error("API error response", nil,
+			map[string]interface{}{
+				"method":    method,
+				"url":       fullURL,
+				"status":    resp.Status,
+				"errorCode": errResp.ErrorCode,
+				"message":   errResp.Message,
+			})
 		return nil, fmt.Errorf("API error: %s (code: %s)", errResp.Message, errResp.ErrorCode)
 	}
 
@@ -94,25 +116,37 @@ func (c *APIClient) CreateCase(ctx context.Context, caseData *Case, headers ...C
 
 	resp, err := c.doRequestWithHeaders(ctx, "POST", "/services/data/v64.0/sobjects/Case/", caseData, reqHeaders)
 	if err != nil {
-		// Getting more information about the error
-		if resp != nil {
-			body, _ := io.ReadAll(resp.Body)
-			c.logger.Error("HTTP error details:", nil, "status", resp.Status, "body", string(body))
-			resp.Body.Close()
-		}
+		/*
+			// Getting more information about the error
+			if resp != nil {
+				body, _ := io.ReadAll(resp.Body)
+				c.logger.Error("HTTP error details:", nil, "status", resp.Status, "body", string(body))
+				resp.Body.Close()
+			}
+		*/
 		return nil, fmt.Errorf("failed to create case: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Logging the response
-	body, _ := io.ReadAll(resp.Body)
-	c.logger.Info("Response received:", "status", resp.Status, "body", string(body))
-
-	// Create a new reader for the response body to decode
-	responseReader := bytes.NewReader(body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.logger.Error("Failed to read case creation response", err, map[string]interface{}{
+			"action":  "create_case",
+			"subject": caseData.Subject,
+			"status":  resp.Status,
+		})
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 
 	var result Case
-	if err := json.NewDecoder(responseReader).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
+		c.logger.Error("Failed to decode case response", err, map[string]interface{}{
+			"action":   "create_case",
+			"subject":  caseData.Subject,
+			"status":   resp.Status,
+			"response": string(body), // Logging the raw response for diagnostics
+		})
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -128,6 +162,12 @@ func (c *APIClient) CreateCase(ctx context.Context, caseData *Case, headers ...C
 func (c *APIClient) doRequestWithHeaders(ctx context.Context, method, path string, body interface{}, customHeaders map[string]string) (*http.Response, error) {
 	token, err := c.getValidToken(ctx)
 	if err != nil {
+		c.logger.Error("Failed to get valid token", err,
+			map[string]interface{}{
+				"method":  method,
+				"path":    path,
+				"headers": customHeaders,
+			})
 		return nil, fmt.Errorf("failed to get token: %w", err)
 	}
 
@@ -135,6 +175,12 @@ func (c *APIClient) doRequestWithHeaders(ctx context.Context, method, path strin
 	if body != nil {
 		jsonData, err := json.Marshal(body)
 		if err != nil {
+			c.logger.Error("Failed to marshal request body", err,
+				map[string]interface{}{
+					"method":  method,
+					"path":    path,
+					"headers": customHeaders,
+				})
 			return nil, fmt.Errorf("failed to marshal request body: %w", err)
 		}
 		reqBody = bytes.NewReader(jsonData)
@@ -143,6 +189,13 @@ func (c *APIClient) doRequestWithHeaders(ctx context.Context, method, path strin
 	fullURL := c.instanceURL + path
 	req, err := http.NewRequestWithContext(ctx, method, fullURL, reqBody)
 	if err != nil {
+		c.logger.Error("Failed to create HTTP request", err,
+			map[string]interface{}{
+				"method":  method,
+				"url":     fullURL,
+				"hasBody": body != nil,
+				"headers": customHeaders,
+			})
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
@@ -158,6 +211,12 @@ func (c *APIClient) doRequestWithHeaders(ctx context.Context, method, path strin
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.logger.Error("HTTP request failed", err,
+			map[string]interface{}{
+				"method":  method,
+				"url":     fullURL,
+				"headers": customHeaders,
+			})
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
@@ -165,8 +224,25 @@ func (c *APIClient) doRequestWithHeaders(ctx context.Context, method, path strin
 		defer resp.Body.Close()
 		var errResp ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+			c.logger.Error("Failed to decode error response", err,
+				map[string]interface{}{
+					"method":     method,
+					"url":        fullURL,
+					"statusCode": resp.StatusCode,
+					"status":     resp.Status,
+					"headers":    customHeaders,
+				})
 			return nil, fmt.Errorf("request failed with status: %s", resp.Status)
 		}
+		c.logger.Error("API returned error response", nil,
+			map[string]interface{}{
+				"method":    method,
+				"url":       fullURL,
+				"status":    resp.Status,
+				"errorCode": errResp.ErrorCode,
+				"message":   errResp.Message,
+				"headers":   customHeaders,
+			})
 		return nil, fmt.Errorf("API error: %s (code: %s)", errResp.Message, errResp.ErrorCode)
 	}
 
@@ -176,7 +252,9 @@ func (c *APIClient) doRequestWithHeaders(ctx context.Context, method, path strin
 // CreateAttachment creates an attachment for a case
 func (c *APIClient) CreateAttachment(ctx context.Context, filePath string) (map[string]interface{}, error) {
 	if filePath == "" {
-		return nil, fmt.Errorf("file path is required")
+		err := fmt.Errorf("file path is required")
+		c.logger.Error("Validation failed", err, nil)
+		return nil, err
 	}
 
 	caseID := c.GetCaseID()
@@ -187,14 +265,16 @@ func (c *APIClient) CreateAttachment(ctx context.Context, filePath string) (map[
 	// Uploading attachment
 	res, err := c.UploadAttachment(ctx, caseID, filePath)
 	if err != nil {
-		// Logging the error
-		c.logger.Json(map[string]interface{}{
-			"action":  "upload attachment",
-			"success": false,
-			"case_id": caseID,
-			"file":    filepath.Base(filePath),
-			"error":   err.Error(),
-		})
+		/*
+			// Logging the error
+			c.logger.Json(map[string]interface{}{
+				"action":  "upload attachment",
+				"success": false,
+				"case_id": caseID,
+				"file":    filepath.Base(filePath),
+				"error":   err.Error(),
+			})
+		*/
 		return nil, err
 	}
 
@@ -217,7 +297,6 @@ func (c *APIClient) CreateAttachment(ctx context.Context, filePath string) (map[
 // Query executes a SOQL query
 func (c *APIClient) Query(ctx context.Context, soql string) (*QueryResponse, error) {
 	path := fmt.Sprintf("/services/data/v64.0/query/?q=%s", url.QueryEscape(soql))
-
 	resp, err := c.doRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, err
@@ -226,6 +305,12 @@ func (c *APIClient) Query(ctx context.Context, soql string) (*QueryResponse, err
 
 	var result QueryResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		c.logger.Error("Failed to decode query response", err,
+			map[string]interface{}{
+				"soql":       soql,
+				"path":       path,
+				"statusCode": resp.StatusCode,
+			})
 		return nil, fmt.Errorf("failed to decode query response: %w", err)
 	}
 
@@ -244,6 +329,11 @@ func (c *APIClient) GetCase(ctx context.Context, caseID string) (*Case, error) {
 
 	var result Case
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		c.logger.Error("Failed to decode case response", err,
+			map[string]interface{}{
+				"caseID": caseID,
+				"path":   path,
+			})
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -253,20 +343,28 @@ func (c *APIClient) GetCase(ctx context.Context, caseID string) (*Case, error) {
 // UploadAttachment uploads a file as an attachment to Salesforce
 func (c *APIClient) UploadAttachment(ctx context.Context, parentID, filePath string) (map[string]interface{}, error) {
 	if parentID == "" {
-		return nil, fmt.Errorf("parent ID is required")
+		err := fmt.Errorf("parent ID is required")
+		//c.logger.Error("Validation failed", err, nil)
+		return nil, err
 	}
 	if filePath == "" {
-		return nil, fmt.Errorf("file path is required")
+		err := fmt.Errorf("file path is required")
+		//c.logger.Error("Validation failed", err, nil)
+		return nil, err
 	}
 
 	// Checking the existence of a file
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		c.logger.Error("File does not exist", err,
+			map[string]interface{}{"filePath": filePath})
 		return nil, fmt.Errorf("file does not exist: %s", filePath)
 	}
 
 	// Open the file
 	file, err := os.Open(filePath)
 	if err != nil {
+		c.logger.Error("Failed to open file", err,
+			map[string]interface{}{"filePath": filePath})
 		return nil, fmt.Errorf("failed to open file %s: %w", filePath, err)
 	}
 	defer file.Close()
@@ -274,17 +372,28 @@ func (c *APIClient) UploadAttachment(ctx context.Context, parentID, filePath str
 	// Getting information about the file
 	fileInfo, err := file.Stat()
 	if err != nil {
+		c.logger.Error("Failed to get file info", err,
+			map[string]interface{}{"filePath": filePath})
 		return nil, fmt.Errorf("failed to get file info: %w", err)
 	}
 
 	// Check file size (Salesforce limit is ~25MB for Attachments)
 	if fileInfo.Size() > 25*1024*1024 {
-		return nil, fmt.Errorf("file size exceeds 25MB limit: %d bytes", fileInfo.Size())
+		err := fmt.Errorf("file size exceeds 25MB limit: %d bytes", fileInfo.Size())
+		c.logger.Error("File size validation failed", err,
+			map[string]interface{}{
+				"filePath": filePath,
+				"fileSize": fileInfo.Size(),
+				"limit":    25 * 1024 * 1024,
+			})
+		return nil, err
 	}
 
 	// Reading the contents of the file
 	rawData, err := io.ReadAll(file)
 	if err != nil {
+		c.logger.Error("Failed to read file content", err,
+			map[string]interface{}{"filePath": filePath})
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
@@ -314,28 +423,45 @@ func (c *APIClient) UploadAttachment(ctx context.Context, parentID, filePath str
 
 	// Checking the response status
 	if res.Code >= 400 {
-		return nil, fmt.Errorf("attachment upload failed with status: %s", res.Status)
+		err := fmt.Errorf("attachment upload failed with status: %s", res.Status)
+		c.logger.Error("Attachment upload failed", err,
+			map[string]interface{}{
+				"parentID":   parentID,
+				"fileName":   fileName,
+				"statusCode": res.Code,
+				"status":     res.Status,
+			})
+		return nil, err
 	}
 
-	// Parsing Salesforce response
-	var apiResponse struct {
-		ID      string `json:"id"`
-		Success bool   `json:"success"`
-		Errors  []struct {
-			Message   string `json:"message"`
-			ErrorCode string `json:"errorCode"`
-		} `json:"errors"`
-	}
+	// Parsing Salesforce response using the package-level struct
+	var apiResponse AttachmentResponse
 
 	if err := json.Unmarshal(res.Data, &apiResponse); err != nil {
+		c.logger.Error("Failed to parse API response", err,
+			map[string]interface{}{
+				"parentID":   parentID,
+				"fileName":   fileName,
+				"statusCode": res.Code,
+				"response":   string(res.Data), // Logging the raw response for diagnostics
+			})
 		return nil, fmt.Errorf("failed to parse API response: %w", err)
 	}
 
 	if !apiResponse.Success {
 		errorMsg := "Salesforce API error"
+		var errorDetails string
 		if len(apiResponse.Errors) > 0 {
 			errorMsg = fmt.Sprintf("%s: %s (code: %s)", errorMsg, apiResponse.Errors[0].Message, apiResponse.Errors[0].ErrorCode)
+			errorDetails = apiResponse.Errors[0].ErrorCode
 		}
+		c.logger.Error("Salesforce API returned error", nil,
+			map[string]interface{}{
+				"parentID":    parentID,
+				"fileName":    fileName,
+				"errorCode":   errorDetails,
+				"apiResponse": apiResponse,
+			})
 		return nil, fmt.Errorf(errorMsg)
 	}
 
@@ -371,6 +497,11 @@ func (c *APIClient) EmailMessage(ctx context.Context, params EmailMessageParams)
 
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		c.logger.Error("Failed to decode email message response", err,
+			map[string]interface{}{
+				"parentID": params.ParentId,
+				"subject":  params.Subject,
+			})
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 

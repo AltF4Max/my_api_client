@@ -1,5 +1,4 @@
-module github.com/AltF4Max/my_api_client
-
+module github.com/AltF4Max/sf_api_client
 go 1.21.5
 
 require (

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/AltF4Max/my_api_client/internal/client"
+	"github.com/AltF4Max/sf_api_client/internal/client"
 
 	"gopkg.in/yaml.v3"
 )
@@ -12,6 +12,8 @@ import (
 type Case = client.Case
 type CaseHeaders = client.CaseHeaders
 type EmailMessageParams = client.EmailMessageParams
+type APIClient = client.APIClient
+type ErrorResponse = client.ErrorResponse
 
 // Structure for parsing given the root element salesforce
 var config struct {
@@ -31,7 +33,7 @@ var config struct {
 }
 
 func GetToEmail() (string, error) {
-	authConfig, err := loadConfig("my_api_client/config/config.yaml")
+	authConfig, err := loadConfig("sf_api_client/config/config.yaml")
 	if err != nil {
 		return "", err
 	}
@@ -40,7 +42,7 @@ func GetToEmail() (string, error) {
 
 func NewAPIClientMax() (*client.APIClient, error) {
 	// Loading configuration from file in config folder
-	authConfig, err := loadConfig("my_api_client/config/config.yaml")
+	authConfig, err := loadConfig("sf_api_client/config/config.yaml")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %v", err)
 	}

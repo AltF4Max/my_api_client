@@ -3,7 +3,7 @@ package examples
 import (
 	"context"
 
-	"github.com/AltF4Max/my_api_client/internal/client"
+	"github.com/AltF4Max/sf_api_client/internal/client"
 )
 
 func ExamplesEmailMessage(ctx context.Context, apiClient *client.APIClient, to string) (map[string]interface{}, error) {
@@ -14,6 +14,7 @@ func ExamplesEmailMessage(ctx context.Context, apiClient *client.APIClient, to s
 		Subject:     "Test Email Subject",
 		TextBody:    "This is the body of the test email",
 		ToAddress:   to, //config.Salesforce.ToEmail
+		//Incoming:    true,
 	}
 
 	// Calling a Method

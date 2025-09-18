@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/AltF4Max/my_api_client/internal/client"
+	"github.com/AltF4Max/sf_api_client/internal/client"
 )
 
 func ExamplesCreateAttachment(ctx context.Context, apiClient *client.APIClient) (map[string]interface{}, error) {
