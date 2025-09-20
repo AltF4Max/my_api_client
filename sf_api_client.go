@@ -1,4 +1,4 @@
-package my_api_client
+package sf_api_client
 
 import (
 	"fmt"

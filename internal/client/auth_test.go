@@ -441,7 +441,87 @@ func TestAPIClient_Request(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to get valid token")
 		assert.Contains(t, err.Error(), "failed to decode auth response")
 	})
+	t.Run("API error with invalid JSON response", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/services/oauth2/token" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"access_token": "test-token",
+					"instance_url": "http://" + r.Host,
+					"token_type":   "Bearer",
+				})
+				return
+			}
 
+			if r.URL.Path == "/test-invalid" {
+				// Returns invalid JSON
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(`{"error": "Invalid", "message": "Something went wrong"`)) // Unclosed parenthesis
+				return
+			}
+		}))
+		defer server.Close()
+
+		client := NewAPIClient(config)
+		client.SetHTTPClient(server.Client())
+		client.SetLoginURL(server.URL + "/services/oauth2/token")
+
+		ctx := context.Background()
+		_, err := client.Request(
+			ctx,
+			"/test-invalid",
+			"GET",
+			nil,
+			nil,
+		)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "request failed with status: 400 Bad Request")
+	})
+	t.Run("API error with single object format", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/services/oauth2/token" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"access_token": "test-token",
+					"instance_url": "http://" + r.Host,
+					"token_type":   "Bearer",
+				})
+				return
+			}
+
+			if r.URL.Path == "/test-forbidden" {
+				// Returns a single object instead of an array.
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"message":   "Access denied",
+					"errorCode": "INSUFFICIENT_ACCESS",
+				})
+				return
+			}
+		}))
+		defer server.Close()
+
+		client := NewAPIClient(config)
+		client.SetHTTPClient(server.Client())
+		client.SetLoginURL(server.URL + "/services/oauth2/token")
+
+		ctx := context.Background()
+		_, err := client.Request(
+			ctx,
+			"/test-forbidden",
+			"GET",
+			nil,
+			nil,
+		)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "API error: Access denied (code: INSUFFICIENT_ACCESS)")
+	})
 	t.Run("API request failed - invalid URL after auth", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/services/oauth2/token" {
@@ -488,7 +568,7 @@ func (m *mockTransport) RoundTrip(*http.Request) (*http.Response, error) {
 	return nil, m.err
 }
 
-// Helper methods
+// Helper methods for testing
 func (c *APIClient) SetHTTPClient(client *http.Client) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

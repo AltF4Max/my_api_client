@@ -2,9 +2,11 @@ package client
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
-	"log"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -14,32 +16,67 @@ import (
 // TestLogger_NewLogger tests Logger constructor
 func TestLogger_NewLogger(t *testing.T) {
 	tests := []struct {
-		name     string
-		debug    bool
-		expected bool
+		name      string
+		debug     bool
+		logFile   string
+		expectErr bool
 	}{
-		{"Debug enabled", true, true},
-		{"Debug disabled", false, false},
+		{"Debug enabled, no file", true, "", false},
+		{"Debug disabled, no file", false, "", false},
+		{"Debug enabled, with file", true, "test.log", false},
+		{"Debug disabled, with file", false, "test.log", false},
+		{"Debug enabled, invalid file", true, "/invalid/path/test.log", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logger := NewLogger(tt.debug)
-			if logger.debug != tt.expected {
-				t.Errorf("Expected debug=%v, got=%v", tt.expected, logger.debug)
+			defer func() {
+				if tt.logFile != "" {
+					os.Remove(tt.logFile)
+				}
+			}()
+
+			logger := NewLogger(tt.debug, tt.logFile)
+			if logger == nil {
+				t.Fatal("Expected logger to be created, got nil")
+			}
+
+			if logger.debug != tt.debug {
+				t.Errorf("Expected debug=%v, got=%v", tt.debug, logger.debug)
+			}
+
+			if tt.logFile != "" && !tt.expectErr && logger.logFile == nil {
+				t.Error("Expected log file to be opened")
+			}
+
+			// Clean up
+			if logger.logFile != nil {
+				logger.Close()
 			}
 		})
 	}
 }
 
+// TestLogger_Close tests Close method
+func TestLogger_Close(t *testing.T) {
+	logger := NewLogger(true, "test_close.log")
+	defer os.Remove("test_close.log")
+
+	if err := logger.Close(); err != nil {
+		t.Errorf("Expected no error on close, got: %v", err)
+	}
+
+	// Test double close - should return nil or a specific error
+	if err := logger.Close(); err != nil {
+		// We check that this is the expected "file already closed" error
+		if !strings.Contains(err.Error(), "already closed") {
+			t.Errorf("Expected 'already closed' error, got: %v", err)
+		}
+	}
+}
+
 // TestLogger_Info tests Info logging
 func TestLogger_Info(t *testing.T) {
-	originalOutput := log.Writer()
-	defer log.SetOutput(originalOutput)
-
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-
 	tests := []struct {
 		name     string
 		debug    bool
@@ -54,11 +91,22 @@ func TestLogger_Info(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			buf.Reset()
-			logger := &Logger{debug: tt.debug}
-			logger.Info(tt.message, tt.fields...)
+			// Capture stdout
+			old := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
 
+			logger := NewLogger(tt.debug, "")
+			logger.Info(tt.message, tt.fields...)
+			logger.Close()
+
+			w.Close()
+			os.Stdout = old
+
+			var buf bytes.Buffer
+			io.Copy(&buf, r)
 			output := buf.String()
+
 			if tt.debug && tt.expected != "" && !strings.Contains(output, tt.expected) {
 				t.Errorf("Expected output to contain '%s', got: '%s'", tt.expected, output)
 			}
@@ -71,12 +119,6 @@ func TestLogger_Info(t *testing.T) {
 
 // TestLogger_Warn tests Warn logging
 func TestLogger_Warn(t *testing.T) {
-	originalOutput := log.Writer()
-	defer log.SetOutput(originalOutput)
-
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-
 	tests := []struct {
 		name     string
 		message  string
@@ -89,11 +131,22 @@ func TestLogger_Warn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			buf.Reset()
-			logger := &Logger{debug: true} // Warn always logs, regardless of debug
-			logger.Warn(tt.message, tt.fields...)
+			// Capture stdout
+			old := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
 
+			logger := NewLogger(true, "") // Warn always logs, regardless of debug
+			logger.Warn(tt.message, tt.fields...)
+			logger.Close()
+
+			w.Close()
+			os.Stdout = old
+
+			var buf bytes.Buffer
+			io.Copy(&buf, r)
 			output := buf.String()
+
 			if !strings.Contains(output, tt.expected) {
 				t.Errorf("Expected output to contain '%s', got: '%s'", tt.expected, output)
 			}
@@ -103,12 +156,6 @@ func TestLogger_Warn(t *testing.T) {
 
 // TestLogger_Error tests Error logging
 func TestLogger_Error(t *testing.T) {
-	originalOutput := log.Writer()
-	defer log.SetOutput(originalOutput)
-
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-
 	testError := errors.New("test error")
 
 	tests := []struct {
@@ -126,11 +173,22 @@ func TestLogger_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			buf.Reset()
-			logger := &Logger{debug: true} // Error is always logged
-			logger.Error(tt.message, tt.err, tt.fields...)
+			// Capture stdout
+			old := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
 
+			logger := NewLogger(true, "") // Error is always logged
+			logger.Error(tt.message, tt.err, tt.fields...)
+			logger.Close()
+
+			w.Close()
+			os.Stdout = old
+
+			var buf bytes.Buffer
+			io.Copy(&buf, r)
 			output := buf.String()
+
 			if !strings.Contains(output, tt.expected) {
 				t.Errorf("Expected output to contain '%s', got: '%s'", tt.expected, output)
 			}
@@ -140,12 +198,6 @@ func TestLogger_Error(t *testing.T) {
 
 // TestLogger_Json tests JSON logging
 func TestLogger_Json(t *testing.T) {
-	originalOutput := log.Writer()
-	defer log.SetOutput(originalOutput)
-
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-
 	tests := []struct {
 		name      string
 		debug     bool
@@ -161,11 +213,22 @@ func TestLogger_Json(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			buf.Reset()
-			logger := &Logger{debug: tt.debug}
-			logger.Json(tt.data)
+			// Capture stdout
+			old := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
 
+			logger := NewLogger(tt.debug, "")
+			logger.Json(tt.data)
+			logger.Close()
+
+			w.Close()
+			os.Stdout = old
+
+			var buf bytes.Buffer
+			io.Copy(&buf, r)
 			output := buf.String()
+
 			if tt.shouldLog && !strings.Contains(output, tt.contains) {
 				t.Errorf("Expected output to contain '%s', got: '%s'", tt.contains, output)
 			}
@@ -178,29 +241,41 @@ func TestLogger_Json(t *testing.T) {
 
 // TestLogger_Json_Error tests JSON logging error handling
 func TestLogger_Json_Error(t *testing.T) {
-	originalOutput := log.Writer()
-	defer log.SetOutput(originalOutput)
+	// Capture stdout
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
 
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-
-	logger := &Logger{debug: true}
+	logger := NewLogger(true, "")
 	// Create invalid JSON data (channel cannot be marshaled)
 	invalidData := map[string]interface{}{
 		"channel": make(chan int),
 	}
 
 	logger.Json(invalidData)
+	logger.Close()
 
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
 	output := buf.String()
-	if !strings.Contains(output, "JSON LOG ERROR:") {
-		t.Errorf("Expected error message, got: '%s'", output)
+
+	// We update the expected string - it is now the error message from l.Error()
+	if !strings.Contains(output, "ERROR: JSON marshaling failed") {
+		t.Errorf("Expected error message 'ERROR: JSON marshaling failed', got: '%s'", output)
 	}
 }
 
 // TestAPIClient_SetCaseID tests SetCaseID method
 func TestAPIClient_SetCaseID(t *testing.T) {
-	client := &APIClient{}
+	logger := NewLogger(false, "")
+	defer logger.Close()
+
+	client := &APIClient{
+		logger: logger,
+	}
 
 	// Test setting non-empty case ID
 	client.SetCaseID("test-case-123")
@@ -223,7 +298,12 @@ func TestAPIClient_SetCaseID(t *testing.T) {
 
 // TestAPIClient_GetCaseID tests GetCaseID method
 func TestAPIClient_GetCaseID(t *testing.T) {
-	client := &APIClient{}
+	logger := NewLogger(false, "")
+	defer logger.Close()
+
+	client := &APIClient{
+		logger: logger,
+	}
 
 	// Test default value (should be empty)
 	if client.GetCaseID() != "" {
@@ -248,6 +328,9 @@ func TestAuthConfig_Structure(t *testing.T) {
 		LoginURL:     "https://login.example.com",
 		GrantType:    "password",
 		Debug:        true,
+		ToEmail:      "test@example.com",
+		LogFile:      "app.log",
+		LogLevel:     "info",
 	}
 
 	if config.ClientID != "test-client" {
@@ -255,6 +338,9 @@ func TestAuthConfig_Structure(t *testing.T) {
 	}
 	if config.ClientSecret != "secret" {
 		t.Errorf("Expected ClientSecret 'secret', got '%s'", config.ClientSecret)
+	}
+	if config.ToEmail != "test@example.com" {
+		t.Errorf("Expected ToEmail 'test@example.com', got '%s'", config.ToEmail)
 	}
 	if !config.Debug {
 		t.Error("Expected Debug to be true")
@@ -264,7 +350,8 @@ func TestAuthConfig_Structure(t *testing.T) {
 // TestAPIClient_Structure tests APIClient structure
 func TestAPIClient_Structure(t *testing.T) {
 	authConfig := &AuthConfig{ClientID: "test-client"}
-	logger := NewLogger(true)
+	logger := NewLogger(true, "")
+	defer logger.Close()
 
 	client := &APIClient{
 		httpClient:  &http.Client{},
@@ -288,5 +375,69 @@ func TestAPIClient_Structure(t *testing.T) {
 	}
 	if client.logger == nil {
 		t.Error("Expected logger to be set")
+	}
+}
+
+// TestAPIClient_Close tests Close method
+func TestAPIClient_Close(t *testing.T) {
+	logger := NewLogger(false, "")
+	client := &APIClient{
+		logger: logger,
+	}
+
+	if err := client.Close(); err != nil {
+		t.Errorf("Expected no error on close, got: %v", err)
+	}
+
+	// Test with nil logger
+	client.logger = nil
+	if err := client.Close(); err != nil {
+		t.Errorf("Expected no error with nil logger, got: %v", err)
+	}
+}
+
+// TestResponse_Structure tests Response structure
+func TestResponse_Structure(t *testing.T) {
+	response := &Response{
+		Success: true,
+		Code:    200,
+		Status:  "OK",
+		Data:    json.RawMessage(`{"key": "value"}`),
+		Raw:     "raw response",
+		Headers: map[string]string{"Content-Type": "application/json"},
+	}
+
+	if !response.Success {
+		t.Error("Expected Success to be true")
+	}
+	if response.Code != 200 {
+		t.Errorf("Expected Code 200, got %d", response.Code)
+	}
+	if response.Status != "OK" {
+		t.Errorf("Expected Status 'OK', got '%s'", response.Status)
+	}
+}
+
+// TestEmailMessageParams_Structure tests EmailMessageParams structure
+func TestEmailMessageParams_Structure(t *testing.T) {
+	params := &EmailMessageParams{
+		ParentId:    "001xx000003DG",
+		FromAddress: "from@example.com",
+		FromName:    "Sender",
+		ToAddress:   "to@example.com",
+		Subject:     "Test Subject",
+		TextBody:    "Test body",
+		Status:      1,
+		Incoming:    true,
+	}
+
+	if params.ParentId != "001xx000003DG" {
+		t.Errorf("Expected ParentId '001xx000003DG', got '%s'", params.ParentId)
+	}
+	if params.FromAddress != "from@example.com" {
+		t.Errorf("Expected FromAddress 'from@example.com', got '%s'", params.FromAddress)
+	}
+	if !params.Incoming {
+		t.Error("Expected Incoming to be true")
 	}
 }

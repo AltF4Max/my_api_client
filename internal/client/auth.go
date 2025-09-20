@@ -224,7 +224,7 @@ func (c *APIClient) Request(ctx context.Context, path, method string, data inter
 		response.Data = body
 	}
 
-	// Handling authorization errors
+	// Handling authorization errors - WE PROCESS 401 SEPARATELY
 	if resp.StatusCode == 401 {
 		c.logger.Warn("Authentication failed, attempting token refresh", map[string]interface{}{
 			"action":     "token_refresh",
@@ -241,6 +241,41 @@ func (c *APIClient) Request(ctx context.Context, path, method string, data inter
 				"error":  err.Error(),
 			})
 		}
+	}
+
+	// Then we process all other errors (≥400, except 401)
+	if resp.StatusCode >= 400 && resp.StatusCode != 401 {
+		// Trying to decode as an error array (standard Salesforce format)
+		var errorArray []ErrorResponse
+		if err := json.Unmarshal(body, &errorArray); err == nil && len(errorArray) > 0 {
+			errResp := errorArray[0]
+			c.logger.Error("API error response", nil, map[string]interface{}{
+				"action":    "api_request",
+				"method":    method,
+				"path":      path,
+				"status":    resp.Status,
+				"errorCode": errResp.ErrorCode,
+				"message":   errResp.Message,
+			})
+			return nil, fmt.Errorf("API error: %s (code: %s)", errResp.Message, errResp.ErrorCode)
+		}
+
+		// We are trying to decode as a single error object
+		var errResp ErrorResponse
+		if err := json.Unmarshal(body, &errResp); err == nil && errResp.ErrorCode != "" {
+			c.logger.Error("API error response", nil, map[string]interface{}{
+				"action":    "api_request",
+				"method":    method,
+				"path":      path,
+				"status":    resp.Status,
+				"errorCode": errResp.ErrorCode,
+				"message":   errResp.Message,
+			})
+			return nil, fmt.Errorf("API error: %s (code: %s)", errResp.Message, errResp.ErrorCode)
+		}
+
+		// If decoding fails, return a general error.
+		return nil, fmt.Errorf("request failed with status: %s", resp.Status)
 	}
 
 	return response, nil

@@ -26,7 +26,7 @@ func NewAPIClient(authConfig *AuthConfig) *APIClient {
 }
 
 // doRequest performs an HTTP request
-func (c *APIClient) doRequest(ctx context.Context, method, path string, body interface{}) (*http.Response, error) { //////
+func (c *APIClient) doRequest(ctx context.Context, method, path string, body interface{}) (*http.Response, error) {
 	token, err := c.getValidToken(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get token: %w", err)
@@ -64,9 +64,11 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, body int
 
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
-		var errResp ErrorResponse
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-			c.logger.Error("Failed to decode error response", err,
+
+		// Read the entire body of the response
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			c.logger.Error("Failed to read error response body", err,
 				map[string]interface{}{
 					"method":     method,
 					"url":        fullURL,
@@ -74,15 +76,42 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, body int
 				})
 			return nil, fmt.Errorf("request failed with status: %s", resp.Status)
 		}
-		c.logger.Error("API error response", nil,
+
+		var errorArray []ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &errorArray); err == nil && len(errorArray) > 0 {
+			errResp := errorArray[0]
+			c.logger.Error("API error response", nil,
+				map[string]interface{}{
+					"method":    method,
+					"url":       fullURL,
+					"status":    resp.Status,
+					"errorCode": errResp.ErrorCode,
+					"message":   errResp.Message,
+				})
+			return nil, fmt.Errorf("API error: %s (code: %s)", errResp.Message, errResp.ErrorCode)
+		}
+
+		var errResp ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &errResp); err == nil && errResp.ErrorCode != "" {
+			c.logger.Error("API error response", nil,
+				map[string]interface{}{
+					"method":    method,
+					"url":       fullURL,
+					"status":    resp.Status,
+					"errorCode": errResp.ErrorCode,
+					"message":   errResp.Message,
+				})
+			return nil, fmt.Errorf("API error: %s (code: %s)", errResp.Message, errResp.ErrorCode)
+		}
+
+		c.logger.Error("Failed to decode error response", nil,
 			map[string]interface{}{
-				"method":    method,
-				"url":       fullURL,
-				"status":    resp.Status,
-				"errorCode": errResp.ErrorCode,
-				"message":   errResp.Message,
+				"method":     method,
+				"url":        fullURL,
+				"statusCode": resp.StatusCode,
+				"response":   string(bodyBytes),
 			})
-		return nil, fmt.Errorf("API error: %s (code: %s)", errResp.Message, errResp.ErrorCode)
+		return nil, fmt.Errorf("request failed with status: %s, response: %s", resp.Status, string(bodyBytes))
 	}
 
 	return resp, nil
@@ -214,28 +243,58 @@ func (c *APIClient) doRequestWithHeaders(ctx context.Context, method, path strin
 
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
-		var errResp ErrorResponse
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-			c.logger.Error("Failed to decode error response", err,
+
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			c.logger.Error("Failed to read error response body", err,
 				map[string]interface{}{
 					"method":     method,
 					"url":        fullURL,
 					"statusCode": resp.StatusCode,
-					"status":     resp.Status,
 					"headers":    customHeaders,
 				})
 			return nil, fmt.Errorf("request failed with status: %s", resp.Status)
 		}
-		c.logger.Error("API returned error response", nil,
+
+		var errorArray []ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &errorArray); err == nil && len(errorArray) > 0 {
+			errResp := errorArray[0]
+			c.logger.Error("API error response", nil,
+				map[string]interface{}{
+					"method":    method,
+					"url":       fullURL,
+					"status":    resp.Status,
+					"errorCode": errResp.ErrorCode,
+					"message":   errResp.Message,
+					"headers":   customHeaders,
+				})
+			return nil, fmt.Errorf("API error: %s (code: %s)", errResp.Message, errResp.ErrorCode)
+		}
+
+		var errResp ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &errResp); err == nil && errResp.ErrorCode != "" {
+			c.logger.Error("API error response", nil,
+				map[string]interface{}{
+					"method":    method,
+					"url":       fullURL,
+					"status":    resp.Status,
+					"errorCode": errResp.ErrorCode,
+					"message":   errResp.Message,
+					"headers":   customHeaders,
+				})
+			return nil, fmt.Errorf("API error: %s (code: %s)", errResp.Message, errResp.ErrorCode)
+		}
+
+		c.logger.Error("Failed to decode error response", nil,
 			map[string]interface{}{
-				"method":    method,
-				"url":       fullURL,
-				"status":    resp.Status,
-				"errorCode": errResp.ErrorCode,
-				"message":   errResp.Message,
-				"headers":   customHeaders,
+				"method":     method,
+				"url":        fullURL,
+				"statusCode": resp.StatusCode,
+				"status":     resp.Status,
+				"headers":    customHeaders,
+				"response":   string(bodyBytes),
 			})
-		return nil, fmt.Errorf("API error: %s (code: %s)", errResp.Message, errResp.ErrorCode)
+		return nil, fmt.Errorf("request failed with status: %s, response: %s", resp.Status, string(bodyBytes))
 	}
 
 	return resp, nil

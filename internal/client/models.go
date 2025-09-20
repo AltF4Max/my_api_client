@@ -198,10 +198,10 @@ func (l *Logger) Json(data map[string]interface{}) {
 	if l.debug {
 		jsonData, err := json.MarshalIndent(data, "", "  ")
 		if err != nil {
-			log.Printf("JSON LOG ERROR: %v", err)
+			l.Error("JSON marshaling failed", err)
 			return
 		}
-		log.Printf("JSON LOG:\n%s", string(jsonData))
+		fmt.Fprintf(l.writer, "JSON LOG:\n%s\n", string(jsonData))
 	}
 }
 
